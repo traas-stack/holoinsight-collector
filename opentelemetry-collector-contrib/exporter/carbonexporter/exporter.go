@@ -64,7 +64,7 @@ func (cs *carbonSender) Shutdown(context.Context) error {
 
 // connPool is a very simple implementation of a pool of net.TCPConn instances.
 // The implementation hides the pool and exposes a Write and Close methods.
-// It leverages the prior art from SignalFx Gateway (see
+// It leverages the prior art from SignalFx HoloinsightServer (see
 // https://github.com/signalfx/gateway/blob/master/protocol/carbon/conn_pool.go
 // but not its implementation).
 //

@@ -143,7 +143,7 @@ func (wp *WavefrontParser) injectCollectDLabels(
 	labelKeys []*metricspb.LabelKey,
 	labelValues []*metricspb.LabelValue,
 ) (string, []*metricspb.LabelKey, []*metricspb.LabelValue) {
-	// This comes from SignalFx Gateway code that has the capability to
+	// This comes from SignalFx HoloinsightServer code that has the capability to
 	// remove CollectD tags from the name of the metric.
 	var toAddDims map[string]string
 	index := strings.Index(metricName, "..")

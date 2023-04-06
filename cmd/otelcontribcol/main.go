@@ -4,7 +4,6 @@
 package main
 
 import (
-	"go.opentelemetry.io/collector/exporter"
 	"log"
 
 	"go.opentelemetry.io/collector/component"
@@ -17,14 +16,13 @@ func main() {
 		log.Fatalf("failed to build components: %v", err)
 	}
 
-	exporter.MakeFactoryMap()
 	info := component.BuildInfo{
 		Command:     "otelcontribcol",
 		Description: "Local OpenTelemetry Collector Contrib binary, testing only.",
 		Version:     "0.75.0-dev",
 	}
 
-	if err := run(otelcol.CollectorSettings{BuildInfo: info, Factories: factories}); err != nil {
+	if err := runInteractive(otelcol.CollectorSettings{BuildInfo: info, Factories: factories}); err != nil {
 		log.Fatal(err)
 	}
 }
