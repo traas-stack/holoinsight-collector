@@ -1,0 +1,107 @@
+name: load-tests
+on:
+  push:
+    branches: [ main ]
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref }}
+  cancel-in-progress: true
+
+env:
+  # See: https://github.com/actions/cache/issues/810#issuecomment-1222550359
+  # Cache downloads for this workflow consistently run in under 2 minutes
+  SEGMENT_DOWNLOAD_TIMEOUT_MINS: 5
+
+jobs:
+  setup-environment:
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    if: ${{ github.actor != 'dependabot[bot]' }}
+    outputs:
+      loadtest_matrix: ${{ steps.splitloadtest.outputs.loadtest_matrix }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v3
+        with:
+          go-version: 1.19
+      - name: Cache Go
+        id: go-cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/go/bin
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: loadtest-${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+      - name: Install Dependencies
+        if: steps.go-cache.outputs.cache-hit != 'true'
+        run: make -j2 gomoddownload
+      - name: Install Tools
+        if: steps.go-cache.outputs.cache-hit != 'true'
+        run: make install-tools
+      - run: make oteltestbedcol
+      - name: Upload Collector Binaries
+        uses: actions/upload-artifact@v3
+        with:
+          name: collector-binaries
+          path: ./bin/*
+      - name: Split Loadtest Jobs
+        id: splitloadtest
+        run: ./.github/workflows/scripts/setup_e2e_tests.sh
+
+  loadtest:
+    runs-on: ubuntu-latest
+    needs: [setup-environment]
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.setup-environment.outputs.loadtest_matrix) }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v3
+        with:
+          go-version: 1.19
+      - name: Cache Go
+        id: go-cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/go/bin
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: loadtest-${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+      - name: Install Dependencies
+        if: steps.go-cache.outputs.cache-hit != 'true'
+        run: make -j2 gomoddownload
+      - name: Install Tools
+        if: steps.go-cache.outputs.cache-hit != 'true'
+        run: make install-tools
+      - run: mkdir -p results && touch results/TESTRESULTS.md
+      - name: Download Collector Binaries
+        uses: actions/download-artifact@v3
+        with:
+          name: collector-binaries
+          path: bin/
+      - run: chmod +x bin/*
+      - name: Loadtest
+        run: make -C testbed run-tests
+        env:
+          TEST_ARGS: "-test.run=${{ matrix.test }}"
+      - name: Set results filename
+        id: filename
+        run: echo "name=$(echo '${{ matrix.test }}' | sed -e 's/|/_/g')" >> $GITHUB_OUTPUT
+      - name: Create Test Result Archive
+        if: ${{ failure() || success() }}
+        continue-on-error: true
+        run: tar -cvf test_results_${{steps.filename.outputs.name}}.tar testbed/tests/results
+      - name: Upload Test Results
+        if: ${{ failure() || success() }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v3
+        with:
+          path: ./*.tar
+      - name: GitHub Issue Generator
+        if: ${{ failure() && github.ref == 'refs/heads/main' }}
+        run: issuegenerator $TEST_RESULTS
