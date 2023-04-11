@@ -7,6 +7,7 @@ OTEL_VERSION=main
 BUILD_INFO_IMPORT_PATH=github.com/traas-stack/holoinsight-collector/internal/otelcontribcore/internal/version
 GIT_HEAD=$(shell git describe --always --match "v[0-9]*" HEAD)
 VERSION=0.1.0-$(GIT_HEAD)
+TAG?=latest
 BUILD_INFO=-ldflags "-X $(BUILD_INFO_IMPORT_PATH).Version=$(VERSION)"
 
 COMP_REL_PATH=internal/components/components.go
@@ -246,7 +247,7 @@ docker-component: check-component
 	GOOS=linux GOARCH=amd64 $(MAKE) $(COMPONENT)
 	cp ./bin/$(COMPONENT)_linux_amd64 ./cmd/$(COMPONENT)/$(COMPONENT)
 	cp -r ./config ./cmd/$(COMPONENT)
-	docker build -t holoinsight-$(COMPONENT):$(VERSION) ./cmd/$(COMPONENT)/
+	docker build -t holoinsight/$(COMPONENT):$(TAG) ./cmd/$(COMPONENT)/
 	rm ./cmd/$(COMPONENT)/$(COMPONENT)
 	rm -rf ./cmd/$(COMPONENT)/config
 
