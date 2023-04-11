@@ -3,7 +3,7 @@ RUN apk --update add ca-certificates
 
 RUN mkdir -p /tmp
 
-FROM scratch
+FROM holoinsight/server-base:1.0.2
 
 ARG USER_UID=10001
 USER ${USER_UID}
@@ -16,4 +16,4 @@ WORKDIR /
 
 EXPOSE 4317 11800 55680 55679
 ENTRYPOINT ["/otelcontribcol"]
-CMD ["--config", "/config/config.yaml"]
+CMD ["--config", "/config/config.yml"]

@@ -8,12 +8,6 @@ receivers:
     holoinsight_server:
       http:
         endpoint: 127.0.0.1:8080
-  holoinsight_otlp:
-    protocols:
-      grpc:
-        endpoint: 0.0.0.0:4317
-        auth:
-          authenticator: http_forwarder_auth
 
 exporters:
   otlp:
@@ -35,7 +29,7 @@ service:
   extensions: [pprof, health_check, http_forwarder_auth]
   pipelines:
     traces:
-      receivers: [holoinsight_skywalking, holoinsight_otlp]
+      receivers: [holoinsight_skywalking]
       exporters: [otlp]
       processors: [batch]
 
