@@ -2,12 +2,14 @@ FROM alpine:latest
 
 #  install curl for docker compose health check
 RUN apk --update add ca-certificates curl bash
-RUN mkdir -p /tmp
 
 ARG USER_UID=10001
 USER ${USER_UID}
 
-COPY otelcontribcol /
+ARG TARGETOS
+ARG TARGETARCH
+
+COPY otelcontribcol_${TARGETOS}_${TARGETARCH} /otelcontribcol
 COPY config/config.yml /config/
 COPY config/component-libraries.yml /config/
 WORKDIR /

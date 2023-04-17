@@ -4,9 +4,6 @@ RUN_CONFIG?=local/config.yaml
 CMD?=
 OTEL_VERSION=main
 
-GOOS ?= $(shell go env GOOS)
-GOARCH ?= $(shell go env GOARCH)
-
 BUILD_INFO_IMPORT_PATH=github.com/traas-stack/holoinsight-collector/internal/otelcontribcore/internal/version
 GIT_HEAD=$(shell git describe --always --match "v[0-9]*" HEAD)
 VERSION=0.1.0-$(GIT_HEAD)
@@ -252,15 +249,19 @@ docker-component: check-component
 	cp -r ./config ./cmd/$(COMPONENT)
 	docker build -t holoinsight/$(COMPONENT):$(TAG) ./cmd/$(COMPONENT)/
 	rm ./cmd/$(COMPONENT)/$(COMPONENT)
-	rm -rf ./cmd/$(COMPONENT)/config
+	rm -rf ./cmd/$(COMPONENT)/configs
 
 .PHONY: docker-component-multiarch # Not intended to be used directly
 docker-component-multiarch: check-component
 	GOOS=linux GOARCH=amd64 $(MAKE) $(COMPONENT)
-	cp ./bin/$(COMPONENT)_linux_amd64 ./cmd/$(COMPONENT)/$(COMPONENT)
+	cp ./bin/$(COMPONENT)_linux_amd64 ./cmd/$(COMPONENT)
+	GOOS=linux GOARCH=arm64 $(MAKE) $(COMPONENT)
+	cp ./bin/$(COMPONENT)_linux_arm64 ./cmd/$(COMPONENT)
 	cp -r ./config ./cmd/$(COMPONENT)
-	docker buildx build --push --platform linux/amd64,linux/arm64/v8 -t holoinsight/$(COMPONENT):$(TAG) ./cmd/$(COMPONENT)/
-	rm ./cmd/$(COMPONENT)/$(COMPONENT)
+	#docker buildx create --name multiarch --use
+	docker buildx build --push --platform linux/amd64,linux/arm64/v8 -t holoinsight/$(COMPONENT):$(TAG) ./cmd/$(COMPONENT)
+	rm ./cmd/$(COMPONENT)/$(COMPONENT)_linux_amd64
+	rm ./cmd/$(COMPONENT)/$(COMPONENT)_linux_arm64
 	rm -rf ./cmd/$(COMPONENT)/config
 
 .PHONY: check-component
@@ -306,7 +307,7 @@ chlog-update: chlog-install
 # Build the Collector executable.
 .PHONY: otelcontribcol
 otelcontribcol:
-	GO111MODULE=on CGO_ENABLED=0 $(GOCMD) build -trimpath -o ./bin/otelcontribcol_$(GOOS)_$(GOARCH)$(EXTENSION) \
+	GOOS=$(GOOS) GOARCH=$(GOARCH) GO111MODULE=on CGO_ENABLED=0 $(GOCMD) build -trimpath -o ./bin/otelcontribcol_$(GOOS)_$(GOARCH)$(EXTENSION) \
 		$(BUILD_INFO) -tags $(GO_BUILD_TAGS) ./cmd/otelcontribcol
 
 # Build the Collector executable, including unstable functionality.
