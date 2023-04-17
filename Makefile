@@ -4,6 +4,9 @@ RUN_CONFIG?=local/config.yaml
 CMD?=
 OTEL_VERSION=main
 
+GOOS ?= $(shell go env GOOS)
+GOARCH ?= $(shell go env GOARCH)
+
 BUILD_INFO_IMPORT_PATH=github.com/traas-stack/holoinsight-collector/internal/otelcontribcore/internal/version
 GIT_HEAD=$(shell git describe --always --match "v[0-9]*" HEAD)
 VERSION=0.1.0-$(GIT_HEAD)
@@ -244,10 +247,19 @@ run:
 
 .PHONY: docker-component # Not intended to be used directly
 docker-component: check-component
+	GOOS=$(GOOS) GOARCH=$(GOARCH) $(MAKE) $(COMPONENT)
+	cp ./bin/$(COMPONENT)_$(GOOS)_$(GOARCH) ./cmd/$(COMPONENT)/$(COMPONENT)
+	cp -r ./config ./cmd/$(COMPONENT)
+	docker build -t holoinsight/$(COMPONENT):$(TAG) ./cmd/$(COMPONENT)/
+	rm ./cmd/$(COMPONENT)/$(COMPONENT)
+	rm -rf ./cmd/$(COMPONENT)/config
+
+.PHONY: docker-component-multiarch # Not intended to be used directly
+docker-component-multiarch: check-component
 	GOOS=linux GOARCH=amd64 $(MAKE) $(COMPONENT)
 	cp ./bin/$(COMPONENT)_linux_amd64 ./cmd/$(COMPONENT)/$(COMPONENT)
 	cp -r ./config ./cmd/$(COMPONENT)
-	docker build -t holoinsight/$(COMPONENT):$(TAG) ./cmd/$(COMPONENT)/
+	docker buildx build --push --platform linux/amd64,linux/arm64/v8 -t holoinsight/$(COMPONENT):$(TAG) ./cmd/$(COMPONENT)/
 	rm ./cmd/$(COMPONENT)/$(COMPONENT)
 	rm -rf ./cmd/$(COMPONENT)/config
 
@@ -260,6 +272,10 @@ endif
 .PHONY: docker-otelcontribcol
 docker-otelcontribcol:
 	COMPONENT=otelcontribcol $(MAKE) docker-component
+
+.PHONY: docker-otelcontribcol-multiarch
+docker-otelcontribcol-multiarch:
+	COMPONENT=otelcontribcol $(MAKE) docker-component-multiarch
 
 .PHONY: generate
 generate:
