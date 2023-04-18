@@ -249,7 +249,7 @@ docker-component: check-component
 	cp -r ./config ./cmd/$(COMPONENT)
 	docker build -t holoinsight/$(COMPONENT):$(TAG) ./cmd/$(COMPONENT)/
 	rm ./cmd/$(COMPONENT)/$(COMPONENT)
-	rm -rf ./cmd/$(COMPONENT)/configs
+	rm -rf ./cmd/$(COMPONENT)/config
 
 .PHONY: docker-component-multiarch # Not intended to be used directly
 docker-component-multiarch: check-component
