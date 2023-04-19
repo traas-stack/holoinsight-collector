@@ -1,15 +1,15 @@
-FROM alpine:latest as prep
-RUN apk --update add ca-certificates
+FROM alpine:latest
 
-RUN mkdir -p /tmp
-
-FROM holoinsight/server-base:1.0.2
+#  install curl for docker compose health check
+RUN apk --update add ca-certificates curl bash
 
 ARG USER_UID=10001
 USER ${USER_UID}
 
-COPY --from=prep /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-COPY otelcontribcol /
+ARG TARGETOS
+ARG TARGETARCH
+
+COPY otelcontribcol_${TARGETOS}_${TARGETARCH} /otelcontribcol
 COPY config/config.yml /config/
 COPY config/component-libraries.yml /config/
 WORKDIR /

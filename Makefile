@@ -244,11 +244,24 @@ run:
 
 .PHONY: docker-component # Not intended to be used directly
 docker-component: check-component
-	GOOS=linux GOARCH=amd64 $(MAKE) $(COMPONENT)
-	cp ./bin/$(COMPONENT)_linux_amd64 ./cmd/$(COMPONENT)/$(COMPONENT)
+	GOOS=$(GOOS) GOARCH=$(GOARCH) $(MAKE) $(COMPONENT)
+	cp ./bin/$(COMPONENT)_$(GOOS)_$(GOARCH) ./cmd/$(COMPONENT)/$(COMPONENT)
 	cp -r ./config ./cmd/$(COMPONENT)
 	docker build -t holoinsight/$(COMPONENT):$(TAG) ./cmd/$(COMPONENT)/
 	rm ./cmd/$(COMPONENT)/$(COMPONENT)
+	rm -rf ./cmd/$(COMPONENT)/config
+
+.PHONY: docker-component-multiarch # Not intended to be used directly
+docker-component-multiarch: check-component
+	GOOS=linux GOARCH=amd64 $(MAKE) $(COMPONENT)
+	cp ./bin/$(COMPONENT)_linux_amd64 ./cmd/$(COMPONENT)
+	GOOS=linux GOARCH=arm64 $(MAKE) $(COMPONENT)
+	cp ./bin/$(COMPONENT)_linux_arm64 ./cmd/$(COMPONENT)
+	cp -r ./config ./cmd/$(COMPONENT)
+	#docker buildx create --name multiarch --use
+	docker buildx build --push --platform linux/amd64,linux/arm64/v8 -t holoinsight/$(COMPONENT):$(TAG) ./cmd/$(COMPONENT)
+	rm ./cmd/$(COMPONENT)/$(COMPONENT)_linux_amd64
+	rm ./cmd/$(COMPONENT)/$(COMPONENT)_linux_arm64
 	rm -rf ./cmd/$(COMPONENT)/config
 
 .PHONY: check-component
@@ -260,6 +273,10 @@ endif
 .PHONY: docker-otelcontribcol
 docker-otelcontribcol:
 	COMPONENT=otelcontribcol $(MAKE) docker-component
+
+.PHONY: docker-otelcontribcol-multiarch
+docker-otelcontribcol-multiarch:
+	COMPONENT=otelcontribcol $(MAKE) docker-component-multiarch
 
 .PHONY: generate
 generate:
@@ -290,7 +307,7 @@ chlog-update: chlog-install
 # Build the Collector executable.
 .PHONY: otelcontribcol
 otelcontribcol:
-	GO111MODULE=on CGO_ENABLED=0 $(GOCMD) build -trimpath -o ./bin/otelcontribcol_$(GOOS)_$(GOARCH)$(EXTENSION) \
+	GOOS=$(GOOS) GOARCH=$(GOARCH) GO111MODULE=on CGO_ENABLED=0 $(GOCMD) build -trimpath -o ./bin/otelcontribcol_$(GOOS)_$(GOARCH)$(EXTENSION) \
 		$(BUILD_INFO) -tags $(GO_BUILD_TAGS) ./cmd/otelcontribcol
 
 # Build the Collector executable, including unstable functionality.
