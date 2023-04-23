@@ -15,6 +15,7 @@
 package holoinsightskywalkingreceiver
 
 import (
+	"fmt"
 	"strconv"
 	"testing"
 
@@ -55,6 +56,19 @@ func TestSetInternalSpanStatus(t *testing.T) {
 			assert.Equal(t, test.code, test.dest.Code())
 		})
 	}
+}
+
+func TestSegmentIdToSpanId(t *testing.T) {
+	segmentId := "de88986043c0471f82eb7df8ea26e9e5.117.16818972022146612"
+	spanId := 0
+	id := segmentIDToSpanID(segmentId, uint32(spanId))
+	fmt.Println(id)
+
+	segmentId1 := "de88986043c0471f82eb7df8ea26e9e5.117.16818972022146614"
+	spanId1 := 2
+	id1 := segmentIDToSpanID(segmentId1, uint32(spanId1))
+	fmt.Println(id1)
+	assert.NotEqual(t, id, id1)
 }
 
 func TestSwKvPairsToInternalAttributes(t *testing.T) {

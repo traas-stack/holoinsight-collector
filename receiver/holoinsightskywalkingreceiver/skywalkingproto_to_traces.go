@@ -16,6 +16,7 @@ package holoinsightskywalkingreceiver // import "github.com/open-telemetry/opent
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/hex"
 	"reflect"
 	"strconv"
@@ -410,10 +411,15 @@ func swStringToUUID(s string, extra uint32) (dst [16]byte) {
 
 func uuidTo8Bytes(uuid [16]byte) [8]byte {
 	// high bit XOR low bit
+	// XOR has a probability to generate the same id
+	//var dst [8]byte
+	//for i := 0; i < 8; i++ {
+	//	dst[i] = uuid[i] ^ uuid[i+8]
+	//}
+
 	var dst [8]byte
-	for i := 0; i < 8; i++ {
-		dst[i] = uuid[i] ^ uuid[i+8]
-	}
+	hash := sha256.Sum256(uuid[:])
+	copy(dst[:], hash[:8])
 	return dst
 }
 
