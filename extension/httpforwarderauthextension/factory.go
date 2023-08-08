@@ -16,9 +16,9 @@ package httpforwarderauthextension
 
 import (
 	"context"
-	"go.opentelemetry.io/collector/extension"
 
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/extension"
 )
 
 const (

@@ -72,11 +72,7 @@ func consumeTraces(ctx context.Context, segment *agent.SegmentObject, consumer c
 	if !ok {
 		fmt.Printf("Grpc from metadata error!")
 	}
-	var tenant string
-	if vs, ok := md["tenant"]; ok && len(vs) > 0 {
-		tenant = vs[0]
-	}
 
-	ptd := SkywalkingToTraces(segment, tenant)
+	ptd := SkywalkingToTraces(segment, md)
 	return consumer.ConsumeTraces(ctx, ptd)
 }
