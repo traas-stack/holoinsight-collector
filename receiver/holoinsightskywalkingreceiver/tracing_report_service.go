@@ -73,6 +73,6 @@ func consumeTraces(ctx context.Context, segment *agent.SegmentObject, consumer c
 		fmt.Printf("Grpc from metadata error!")
 	}
 
-	ptd := SkywalkingToTraces(segment, md)
+	ptd := SkywalkingToTraces(ctx, segment, md)
 	return consumer.ConsumeTraces(ctx, ptd)
 }

@@ -101,18 +101,13 @@ func (e *authExtension) authenticate(ctx context.Context, headers map[string][]s
 		}
 		apikey = m[Authentication]
 		delete(m, Authentication)
-		extendTags, err := json.Marshal(m)
-		if err != nil {
-			e.logger.Error("[httpforwarderauthextension] extend tags marshal error: ", zap.Error(err))
-			return nil, err
-		}
-		headers[ExtendTags] = []string{string(extendTags)}
+		ctx = context.WithValue(ctx, ExtendTags, m)
 	}
 
 	// Get from cache
 	value, _ := e.cache.Get([]byte(apikey))
 	if len(value) != 0 {
-		headers[GrpcMetadataTenant] = []string{string(value)}
+		ctx = context.WithValue(ctx, GrpcMetadataTenant, value)
 		newCtx := metadata.NewIncomingContext(ctx, headers)
 		return newCtx, nil
 	}
@@ -142,7 +137,7 @@ func (e *authExtension) authenticate(ctx context.Context, headers map[string][]s
 		return ctx, errCheckErrAuthentication
 	}
 
-	headers[GrpcMetadataTenant] = []string{m[GrpcMetadataTenant].(string)}
+	ctx = context.WithValue(ctx, GrpcMetadataTenant, m[GrpcMetadataTenant])
 	newCtx := metadata.NewIncomingContext(ctx, headers)
 	return newCtx, nil
 }

@@ -16,9 +16,9 @@ package holoinsightskywalkingreceiver // import "github.com/open-telemetry/opent
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"google.golang.org/grpc/metadata"
 	"reflect"
 	"strconv"
@@ -62,7 +62,7 @@ var otSpanTagsMapping = map[string]string{
 	"mq.topic":        conventions.AttributeMessagingDestination,
 }
 
-func SkywalkingToTraces(segment *agentV3.SegmentObject, md metadata.MD) ptrace.Traces {
+func SkywalkingToTraces(ctx context.Context, segment *agentV3.SegmentObject, md metadata.MD) ptrace.Traces {
 	traceData := ptrace.NewTraces()
 
 	swSpans := segment.Spans
@@ -76,10 +76,9 @@ func SkywalkingToTraces(segment *agentV3.SegmentObject, md metadata.MD) ptrace.T
 	// for _, span := range swSpans {
 	//	swTagsToInternalResource(span, rs)
 	//}
-
-	if vs, ok := md[Tenant]; ok && len(vs) > 0 {
-		rs.Attributes().PutStr(Tenant, vs[0])
-		delete(md, Tenant)
+	value := ctx.Value(Tenant)
+	if value != nil {
+		rs.Attributes().PutStr(Tenant, value.(string))
 	}
 	rs.Attributes().PutStr(conventions.AttributeServiceName, segment.GetService())
 	rs.Attributes().PutStr(conventions.AttributeServiceInstanceID, segment.GetServiceInstance())
@@ -88,7 +87,7 @@ func SkywalkingToTraces(segment *agentV3.SegmentObject, md metadata.MD) ptrace.T
 	rs.Attributes().PutStr(AttributeInstance, swServiceInstanceToIP(segment.GetServiceInstance()))
 
 	il := resourceSpan.ScopeSpans().AppendEmpty()
-	swSpansToSpanSlice(segment.GetTraceId(), segment.GetTraceSegmentId(), swSpans, il.Spans(), md)
+	swSpansToSpanSlice(ctx, segment.GetTraceId(), segment.GetTraceSegmentId(), swSpans, il.Spans(), md)
 
 	return traceData
 }
@@ -121,7 +120,7 @@ func swServiceInstanceToIP(serviceInstance string) string {
 //	}
 //}
 
-func swSpansToSpanSlice(traceID string, segmentID string, spans []*agentV3.SpanObject, dest ptrace.SpanSlice, md metadata.MD) {
+func swSpansToSpanSlice(ctx context.Context, traceID string, segmentID string, spans []*agentV3.SpanObject, dest ptrace.SpanSlice, md metadata.MD) {
 	if len(spans) == 0 {
 		return
 	}
@@ -131,11 +130,11 @@ func swSpansToSpanSlice(traceID string, segmentID string, spans []*agentV3.SpanO
 		if span == nil {
 			continue
 		}
-		swSpanToSpan(traceID, segmentID, span, dest.AppendEmpty(), md)
+		swSpanToSpan(ctx, traceID, segmentID, span, dest.AppendEmpty(), md)
 	}
 }
 
-func swSpanToSpan(traceID string, segmentID string, span *agentV3.SpanObject, dest ptrace.Span, md metadata.MD) {
+func swSpanToSpan(ctx context.Context, traceID string, segmentID string, span *agentV3.SpanObject, dest ptrace.Span, md metadata.MD) {
 	dest.SetTraceID(swTraceIDToTraceID(traceID))
 	// skywalking defines segmentId + spanId as unique identifier
 	// so use segmentId to convert to an unique otel-span
@@ -161,9 +160,9 @@ func swSpanToSpan(traceID string, segmentID string, span *agentV3.SpanObject, de
 
 	// {"custom_tag1":"xx", "custom_tag2":"xx"}
 	// custom tags will be added to span tags
-	if vs, ok := md[ExtendTags]; ok && len(vs) > 0 {
-		m := make(map[string]string)
-		json.Unmarshal([]byte(vs[0]), &m) //nolint
+	value := ctx.Value(ExtendTags)
+	if value != nil {
+		m := value.(map[string]string)
 		for k, v := range m {
 			attrs.PutStr(k, v)
 		}
