@@ -19,14 +19,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"go.opentelemetry.io/collector/extension/auth"
+	"strings"
 
 	"github.com/coocood/freecache"
+	"github.com/traas-stack/holoinsight-collector/internal/utils"
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/extension/auth"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/metadata"
-
-	"github.com/traas-stack/holoinsight-collector/internal/utils"
 )
 
 type authExtension struct {
@@ -36,9 +36,11 @@ type authExtension struct {
 }
 
 const (
-	Authentication     = "authentication"
-	GrpcMetadataTenant = "tenant"
-	CacheExpire        = 60 * 60 // 1 hour
+	Authentication             = "authentication"
+	ExtendAuthenticationPrefix = "extend"
+	ExtendTags                 = "extend_tags"
+	GrpcMetadataTenant         = "tenant"
+	CacheExpire                = 60 * 60 // 1 hour
 )
 
 var (
@@ -77,34 +79,65 @@ func (e *authExtension) authenticate(ctx context.Context, headers map[string][]s
 	if len(authHeaders) == 0 || authHeaders[0] == "" {
 		return ctx, errNotAuthenticated
 	}
+	apikey := authHeaders[0]
+	var err error
+	if e.cfg.Enable && e.cfg.SecretKey != "" {
+		apikey, err = AesDecrypt(authHeaders[0], e.cfg.SecretKey, e.cfg.IV)
+		if err != nil {
+			e.logger.Error("[httpforwarderauthextension] aes decrypt error: ", zap.Error(err))
+			return ctx, errCheckErrAuthentication
+		}
+	}
+
+	// extend{"authentication":"xx", "custom_tag1":"xx", "custom_tag2":"xx"}
+	// authentication is required, custom tags will be added to span tags
+	if strings.HasPrefix(apikey, ExtendAuthenticationPrefix) {
+		split := strings.Split(apikey, ExtendAuthenticationPrefix)
+		m := make(map[string]string)
+		err = json.Unmarshal([]byte(split[1]), &m)
+		if err != nil {
+			e.logger.Error("[httpforwarderauthextension] extend authentication unmarshal error: ", zap.Error(err))
+			return nil, err
+		}
+		apikey = m[Authentication]
+		delete(m, Authentication)
+		ctx = context.WithValue(ctx, ExtendTags, m)
+	}
 
 	// Get from cache
-	value, _ := e.cache.Get([]byte(authHeaders[0]))
-	if value != nil && len(value) != 0 { //nolint
-		headers[GrpcMetadataTenant] = []string{string(value)}
+	value, _ := e.cache.Get([]byte(apikey))
+	if len(value) != 0 {
+		ctx = context.WithValue(ctx, GrpcMetadataTenant, value)
 		newCtx := metadata.NewIncomingContext(ctx, headers)
 		return newCtx, nil
 	}
 
 	// Http get
-	response, err := utils.HTTPGet(e.cfg.URL + "?apikey=" + authHeaders[0])
+	response, err := utils.HTTPGet(e.cfg.URL + "?apikey=" + apikey)
 	if err != nil {
 		e.logger.Error("[httpforwarderauthextension] authentication check error: ", zap.Error(err))
 		return ctx, errCheckErrAuthentication
 	}
 
 	if len(response) == 0 {
-		e.logger.Warn(fmt.Sprintf("[httpforwarderauthextension] authentication %s permission denied!", authHeaders[0]))
+		e.logger.Warn(fmt.Sprintf("[httpforwarderauthextension] authentication %s permission denied!", apikey))
 		return ctx, errAuthenticationPermissionDenied
 	}
 
-	m := make(map[string]string)
-	json.Unmarshal(response, &m) //nolint
+	m := make(map[string]any)
+	err = json.Unmarshal(response, &m)
+	if err != nil {
+		e.logger.Error("[httpforwarderauthextension] authentication unmarshal error: ", zap.Error(err))
+		return nil, err
+	}
 
-	e.cache.Set([]byte(authHeaders[0]), []byte(m[GrpcMetadataTenant]), CacheExpire) //nolint
+	err = e.cache.Set([]byte(authHeaders[0]), []byte(m[GrpcMetadataTenant].(string)), CacheExpire)
+	if err != nil {
+		e.logger.Error("[httpforwarderauthextension] cache error: ", zap.Error(err))
+		return ctx, errCheckErrAuthentication
+	}
 
-	headers[GrpcMetadataTenant] = []string{m[GrpcMetadataTenant]}
+	ctx = context.WithValue(ctx, GrpcMetadataTenant, m[GrpcMetadataTenant])
 	newCtx := metadata.NewIncomingContext(ctx, headers)
-
 	return newCtx, nil
 }
