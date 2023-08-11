@@ -4,6 +4,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/hex"
+	"errors"
 )
 
 func AesDecrypt(value, secretKey, iv string) (string, error) {
@@ -36,6 +37,9 @@ func AesDecrypt(value, secretKey, iv string) (string, error) {
 		copy(ivBytes, iv)
 
 		blockMode := cipher.NewCBCDecrypter(block, ivBytes)
+		if len(encryptedData)%aes.BlockSize != 0 {
+			return value, errors.New("not encrypted apikey")
+		}
 		blockMode.CryptBlocks(result, encryptedData)
 	}
 
