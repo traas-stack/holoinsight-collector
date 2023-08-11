@@ -84,8 +84,7 @@ func (e *authExtension) authenticate(ctx context.Context, headers map[string][]s
 	if e.cfg.Enable && e.cfg.SecretKey != "" {
 		apikey, err = AesDecrypt(authHeaders[0], e.cfg.SecretKey, e.cfg.IV)
 		if err != nil {
-			e.logger.Error("[httpforwarderauthextension] aes decrypt error: ", zap.Error(err))
-			return ctx, errCheckErrAuthentication
+			e.logger.Debug("[httpforwarderauthextension] aes decrypt error: ", zap.Error(err))
 		}
 	}
 
@@ -107,7 +106,7 @@ func (e *authExtension) authenticate(ctx context.Context, headers map[string][]s
 	// Get from cache
 	value, _ := e.cache.Get([]byte(apikey))
 	if len(value) != 0 {
-		ctx = context.WithValue(ctx, GrpcMetadataTenant, value)
+		ctx = context.WithValue(ctx, GrpcMetadataTenant, string(value))
 		newCtx := metadata.NewIncomingContext(ctx, headers)
 		return newCtx, nil
 	}
@@ -137,7 +136,7 @@ func (e *authExtension) authenticate(ctx context.Context, headers map[string][]s
 		return ctx, errCheckErrAuthentication
 	}
 
-	ctx = context.WithValue(ctx, GrpcMetadataTenant, m[GrpcMetadataTenant])
+	ctx = context.WithValue(ctx, GrpcMetadataTenant, m[GrpcMetadataTenant].(string))
 	newCtx := metadata.NewIncomingContext(ctx, headers)
 	return newCtx, nil
 }

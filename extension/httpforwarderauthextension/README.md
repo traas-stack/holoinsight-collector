@@ -10,6 +10,7 @@ extensions:
   http_forwarder_auth:
     url: http://localhost:8080/internal/api/gateway/apikey/check
     decrypt:
+      enable: false
       secretKey:
       iv:
 
