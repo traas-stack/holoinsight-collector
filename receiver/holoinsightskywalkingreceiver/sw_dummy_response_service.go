@@ -139,7 +139,7 @@ func (d *dummyReportService) FetchConfigurations(ctx context.Context, req *v3c.C
 
 		c := &common.Command{Command: "ConfigurationDiscoveryCommand", Args: configList}
 		d.logger.Info(fmt.Sprintf("[fetchConfigurations] tenant: %s, service: %s, extendInfo: %s, config: %s",
-			agentConfiguration.Tenant, agentConfiguration.Service, extendInfo, agentConfiguration.Configuration))
+			tenant, service, extendInfo, agentConfiguration.Configuration))
 
 		return &common.Commands{Commands: []*common.Command{c}}, nil
 	}
