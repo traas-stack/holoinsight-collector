@@ -7,6 +7,6 @@ import (
 )
 
 const (
-	Type            = "holoinsightdatadog"
+	Type            = "holoinsight_datadog"
 	TracesStability = component.StabilityLevelAlpha
 )

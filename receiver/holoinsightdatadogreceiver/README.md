@@ -28,7 +28,7 @@ Example:
 
 ```yaml
 receivers:
-  holoinsightdatadog:
+  holoinsight_datadog:
     endpoint: localhost:8126
     read_timeout: 60s
 ```
