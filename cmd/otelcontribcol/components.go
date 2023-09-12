@@ -4,6 +4,7 @@ package main
 
 import (
 	"github.com/traas-stack/holoinsight-collector/extension/httpforwarderauthextension"
+	"github.com/traas-stack/holoinsight-collector/receiver/holoinsightdatadogreceiver"
 	"github.com/traas-stack/holoinsight-collector/receiver/holoinsightotlpreceiver"
 	"github.com/traas-stack/holoinsight-collector/receiver/holoinsightskywalkingreceiver"
 	"go.opentelemetry.io/collector/connector"
@@ -213,6 +214,7 @@ func components() (otelcol.Factories, error) {
 	factories.Receivers, err = receiver.MakeFactoryMap(
 		holoinsightotlpreceiver.NewFactory(),
 		holoinsightskywalkingreceiver.NewFactory(),
+		holoinsightdatadogreceiver.NewFactory(),
 		otlpreceiver.NewFactory(),
 		activedirectorydsreceiver.NewFactory(),
 		aerospikereceiver.NewFactory(),
