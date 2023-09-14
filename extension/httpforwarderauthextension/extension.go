@@ -42,7 +42,7 @@ const (
 	ExtendTags                 = "extend_tags"
 	GrpcMetadataTenant         = "tenant"
 	GrpcTraceStatus            = "traceStatus"
-	CacheExpire                = 5 * 60 // 5 minutes
+	CacheExpire                = 2 * 60 // 2 minutes
 )
 
 var (
