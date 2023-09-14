@@ -114,6 +114,12 @@ func (e *authExtension) authenticate(ctx context.Context, headers map[string][]s
 			e.logger.Error("[httpforwarderauthextension] authentication check error: ", zap.Error(err))
 			return ctx, errCheckErrAuthentication
 		}
+
+		err = e.cache.Set([]byte(apikey), response, CacheExpire)
+		if err != nil {
+			e.logger.Error("[httpforwarderauthextension] cache error: ", zap.Error(err))
+			return ctx, errCheckErrAuthentication
+		}
 	}
 
 	m := make(map[string]string)
@@ -130,12 +136,6 @@ func (e *authExtension) authenticate(ctx context.Context, headers map[string][]s
 	if m[GrpcTraceStatus] == "false" {
 		e.logger.Warn(fmt.Sprintf("[httpforwarderauthextension] authentication %s trace is not enabled!", apikey))
 		return ctx, errTraceNotEnabled
-	}
-
-	err = e.cache.Set([]byte(apikey), response, CacheExpire)
-	if err != nil {
-		e.logger.Error("[httpforwarderauthextension] cache error: ", zap.Error(err))
-		return ctx, errCheckErrAuthentication
 	}
 
 	ctx = context.WithValue(ctx, GrpcMetadataTenant, m[GrpcMetadataTenant])
