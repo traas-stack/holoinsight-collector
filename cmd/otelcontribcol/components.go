@@ -3,6 +3,7 @@
 package main
 
 import (
+	"github.com/traas-stack/holoinsight-collector/extension/holoinsightlogsextension"
 	"github.com/traas-stack/holoinsight-collector/extension/httpforwarderauthextension"
 	"github.com/traas-stack/holoinsight-collector/receiver/holoinsightdatadogreceiver"
 	"github.com/traas-stack/holoinsight-collector/receiver/holoinsightotlpreceiver"
@@ -187,6 +188,7 @@ func components() (otelcol.Factories, error) {
 	factories := otelcol.Factories{}
 
 	factories.Extensions, err = extension.MakeFactoryMap(
+		holoinsightlogsextension.NewFactory(),
 		httpforwarderauthextension.NewFactory(),
 		zpagesextension.NewFactory(),
 		ballastextension.NewFactory(),
