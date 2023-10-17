@@ -7,13 +7,11 @@
 ```yaml
 extensions:
   holoinsight_logs:
+    server_endpoint: "http://127.0.0.1:8080"
     http:
       endpoint: 0.0.0.0:5551
     alibabacloud_logservice:
       endpoint: "xxxx"
-      project: "demo-project"
-      access_key_id: "access-key-id"
-      access_key_secret: "access-key-secret"
     decrypt:
       enable: false
       secretKey:

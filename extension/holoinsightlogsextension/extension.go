@@ -21,32 +21,35 @@ import (
 	"fmt"
 	sls "github.com/aliyun/aliyun-log-go-sdk"
 	"github.com/gorilla/mux"
+	"github.com/traas-stack/holoinsight-collector/internal/utils"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/extension"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 	"net/http"
+	"net/url"
 	"time"
 )
 
 type logsExtension struct {
-	cfg    *Config
-	logger *zap.Logger
-	server *http.Server
-	params extension.CreateSettings
-	client LogServiceClient
+	cfg         *Config
+	logger      *zap.Logger
+	server      *http.Server
+	params      extension.CreateSettings
+	clientCache map[string]LogServiceClient
 }
 
 func newExtension(cfg *Config, params extension.CreateSettings) (extension.Extension, error) {
-	l := &logsExtension{
-		cfg:    cfg,
-		logger: params.Logger,
-		server: &http.Server{},
-		params: params,
+	if cfg.ServerEndpoint == "" {
+		return nil, errors.New("server endpoint not set")
 	}
-	var err error
-	if l.client, err = NewLogServiceClient(cfg, l.logger); err != nil {
-		return nil, err
+
+	l := &logsExtension{
+		cfg:         cfg,
+		logger:      params.Logger,
+		server:      &http.Server{},
+		params:      params,
+		clientCache: make(map[string]LogServiceClient),
 	}
 
 	return l, nil
@@ -63,16 +66,16 @@ func (l logsExtension) Start(ctx context.Context, host component.Host) error {
 		router,
 	)
 	if err != nil {
-		return fmt.Errorf("[holoinsight_logs] failed to create holoinsight logs server definition: %w", err)
+		return fmt.Errorf("[holoinsightlogsextension] failed to create holoinsight logs server definition: %w", err)
 	}
 	hln, err := l.cfg.HTTP.ToListener()
 	if err != nil {
-		return fmt.Errorf("[holoinsight_logs] failed to create holoinsight logs listener: %w", err)
+		return fmt.Errorf("[holoinsightlogsextension] failed to create holoinsight logs listener: %w", err)
 	}
 
 	go func() {
 		if err := l.server.Serve(hln); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			host.ReportFatalError(fmt.Errorf("[holoinsight_logs] error starting holoinsight logs extension: %w", err))
+			host.ReportFatalError(fmt.Errorf("[holoinsightlogsextension] error starting holoinsight logs extension: %w", err))
 		}
 	}()
 	return nil
@@ -90,27 +93,73 @@ func (l logsExtension) handleLogs(w http.ResponseWriter, req *http.Request) {
 		decryptLogstore, err := AesDecrypt(logstore, l.cfg.SecretKey, l.cfg.IV)
 		if err != nil {
 			http.Error(w, "Unauthorized access", http.StatusUnauthorized)
-			l.logger.Error(fmt.Sprintf("[holoinsight_logs] logstore: %s, unauthorized access", logstore))
+			l.logger.Error(fmt.Sprintf("[holoinsightlogsextension] logstore: %s, unauthorized access", logstore))
 			return
 		}
 		logstore = decryptLogstore
 	}
-	l.client.SetLogStore(logstore)
 
 	datas, err := handlePayload(req)
 	if err != nil {
-		http.Error(w, "handler payload error", http.StatusInternalServerError)
-		l.logger.Error(fmt.Sprintf("[holoinsight_logs] logstore: %s, handlePayload error: ", logstore), zap.Error(err))
+		http.Error(w, "", http.StatusInternalServerError)
+		l.logger.Error(fmt.Sprintf("[holoinsightlogsextension] logstore: %s, handlePayload error: ", logstore), zap.Error(err))
 		return
 	}
-	logs := l.dataToSLSLogs(datas)
-	if l.pushLogsData(logs) != nil {
+
+	client, err := l.getLogServiceClient(logstore)
+	if err != nil {
+		http.Error(w, "", http.StatusInternalServerError)
+		l.logger.Error(fmt.Sprintf("[holoinsightlogsextension] logstore: %s, get log service client error: ", logstore), zap.Error(err))
+		return
+	}
+
+	logs := l.dataToSLSLogs(datas, client)
+	if client.SendLogs(logs) != nil {
 		http.Error(w, "push data error", http.StatusInternalServerError)
-		l.logger.Error(fmt.Sprintf("[holoinsight_logs] logstore: %s, pushLogsData error: ", logstore), zap.Error(err))
+		l.logger.Error(fmt.Sprintf("[holoinsightlogsextension] logstore: %s, pushLogsData error: ", logstore), zap.Error(err))
 	}
 }
 
-func (l logsExtension) dataToSLSLogs(data *Data) []*sls.Log {
+func (l logsExtension) getLogServiceClient(key string) (LogServiceClient, error) {
+	// Get sls client from cache
+	client := l.clientCache[key]
+	if client == nil {
+		// Get from holoinsight server
+		response, err := utils.HTTPGet(l.cfg.ServerEndpoint + "/internal/customize/log/project/query?key=" + url.QueryEscape(key))
+		if err != nil {
+			l.logger.Error("[holoinsightlogsextension] get project from holoinsight server error: ", zap.Error(err))
+			return nil, err
+		}
+		if response == nil {
+			l.logger.Error("[holoinsightlogsextension] get empty sls config from holoinsight server: ", zap.Error(err))
+			return nil, err
+		}
+
+		slsProjectConfig := make(map[string]string)
+		err = json.Unmarshal(response, &slsProjectConfig)
+		if err != nil {
+			l.logger.Error("[holoinsightlogsextension] Unmarshal sls config error: ", zap.Error(err))
+			return nil, err
+		}
+
+		slsConfig := &SLSConfig{
+			Endpoint:        l.cfg.Endpoint,
+			Project:         slsProjectConfig["projectName"],
+			Logstore:        key,
+			AccessKeyID:     slsProjectConfig["accessId"],
+			AccessKeySecret: slsProjectConfig["accessKey"],
+		}
+		client, err = NewLogServiceClient(slsConfig, l.logger)
+		if err != nil {
+			l.logger.Error("[holoinsightlogsextension] new log service client error: ", zap.Error(err))
+			return nil, err
+		}
+		l.clientCache[key] = client
+	}
+	return client, nil
+}
+
+func (l logsExtension) dataToSLSLogs(data *Data, client LogServiceClient) []*sls.Log {
 	result := make([]*sls.Log, 0)
 	for _, tmpLog := range data.Logs {
 		log := &sls.Log{
@@ -134,7 +183,7 @@ func (l logsExtension) dataToSLSLogs(data *Data) []*sls.Log {
 		}
 
 		if data.Topic != "" {
-			l.client.SetTopic(data.Topic)
+			client.SetTopic(data.Topic)
 			log.Contents = append(log.Contents, &sls.LogContent{
 				Key:   proto.String("__topic__"),
 				Value: proto.String(data.Topic),
@@ -142,7 +191,7 @@ func (l logsExtension) dataToSLSLogs(data *Data) []*sls.Log {
 		}
 
 		if data.Source != "" {
-			l.client.SetSource(data.Source)
+			client.SetSource(data.Source)
 			log.Contents = append(log.Contents, &sls.LogContent{
 				Key:   proto.String("__source__"),
 				Value: proto.String(data.Source),
@@ -150,8 +199,4 @@ func (l logsExtension) dataToSLSLogs(data *Data) []*sls.Log {
 		}
 	}
 	return result
-}
-
-func (l logsExtension) pushLogsData(logs []*sls.Log) error {
-	return l.client.SendLogs(logs)
 }

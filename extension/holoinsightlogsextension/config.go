@@ -16,12 +16,12 @@ package holoinsightlogsextension
 
 import (
 	"go.opentelemetry.io/collector/config/confighttp"
-	"go.opentelemetry.io/collector/config/configopaque"
 )
 
 type Config struct {
-	HTTP      *confighttp.HTTPServerSettings `mapstructure:"http"`
-	SLSConfig `mapstructure:"alibabacloud_logservice"`
+	ServerEndpoint string                         `mapstructure:"server_endpoint"`
+	HTTP           *confighttp.HTTPServerSettings `mapstructure:"http"`
+	SLSConfig      `mapstructure:"alibabacloud_logservice"`
 	// If you want to encrypt the secretKey and iv of the holoinsight collector, it needs to be consistent with the holoinsight backend
 	// The holoinsight backend encrypts the configuration, and the holoinsight collector decrypts it
 	Decrypt `mapstructure:"decrypt"`
@@ -46,8 +46,10 @@ type SLSConfig struct {
 	Endpoint string `mapstructure:"endpoint"`
 	// LogService's Project Name
 	Project string `mapstructure:"project"`
+	// LogService's Logstore Name
+	Logstore string `mapstructure:"logstore"`
 	// AlibabaCloud access key id
 	AccessKeyID string `mapstructure:"access_key_id"`
 	// AlibabaCloud access key secret
-	AccessKeySecret configopaque.String `mapstructure:"access_key_secret"`
+	AccessKeySecret string `mapstructure:"access_key_secret"`
 }
