@@ -16,6 +16,7 @@ package holoinsightlogsextension // import "github.com/open-telemetry/openteleme
 
 import (
 	"errors"
+	"fmt"
 	"net"
 	"os"
 
@@ -55,44 +56,46 @@ func getIPAddress() (ipAddress string, err error) {
 }
 
 // NewLogServiceClient Create Log Service client
-func NewLogServiceClient(config *Config, logger *zap.Logger) (LogServiceClient, error) {
+func NewLogServiceClient(config *SLSConfig, logger *zap.Logger) (LogServiceClient, error) {
 	if config == nil || config.Endpoint == "" || config.Project == "" {
-		return nil, errors.New("[holoinsight_logs] missing logservice params: Endpoint, Project")
+		return nil, errors.New("[holoinsightlogsextension] missing logservice params: Endpoint, Project")
 	}
 
 	producerConfig := producer.GetDefaultProducerConfig()
 	producerConfig.Endpoint = config.Endpoint
 	producerConfig.AccessKeyID = config.AccessKeyID
-	producerConfig.AccessKeySecret = string(config.AccessKeySecret)
+	producerConfig.AccessKeySecret = config.AccessKeySecret
 
 	c := &logServiceClientImpl{
 		project:        config.Project,
 		clientInstance: producer.InitProducer(producerConfig),
 		logger:         logger,
+		logstore:       config.Logstore,
 	}
 	c.clientInstance.Start()
 	// do not return error if get hostname or ip address fail
 	c.topic, _ = os.Hostname()
 	c.source, _ = getIPAddress()
-	logger.Info("[holoinsight_logs] Create LogService client success", zap.String("project", config.Project))
+	logger.Info("[holoinsightlogsextension] Create LogService client success", zap.String("project", config.Project), zap.String("logstore", config.Logstore))
 	return c, nil
 }
 
 // SendLogs send message to LogService
 func (c *logServiceClientImpl) SendLogs(logs []*sls.Log) error {
 	if c.logstore == "" {
-		return errors.New("[holoinsight_logs] missing logservice params: LogStore")
+		return errors.New("[holoinsightlogsextension] missing logservice params: LogStore")
 	}
 	return c.clientInstance.SendLogListWithCallBack(c.project, c.logstore, c.topic, c.source, logs, c)
 }
 
 // Success is impl of producer.CallBack
 func (c *logServiceClientImpl) Success(*producer.Result) {
+	c.logger.Info(fmt.Sprintf("Write successed, project: %s, logstore: %s", c.project, c.logstore))
 }
 
 // Fail is impl of producer.CallBack
 func (c *logServiceClientImpl) Fail(result *producer.Result) {
-	c.logger.Warn("[holoinsight_logs] Send to LogService failed",
+	c.logger.Warn("[holoinsightlogsextension] Send to LogService failed",
 		zap.String("project", c.project),
 		zap.String("store", c.logstore),
 		zap.String("code", result.GetErrorCode()),
