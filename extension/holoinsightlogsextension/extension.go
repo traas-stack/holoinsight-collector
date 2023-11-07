@@ -161,42 +161,43 @@ func (l logsExtension) getLogServiceClient(key string) (LogServiceClient, error)
 
 func (l logsExtension) dataToSLSLogs(data *Data, client LogServiceClient) []*sls.Log {
 	result := make([]*sls.Log, 0)
+	log := &sls.Log{
+		Time:     proto.Uint32(uint32(time.Now().Unix())),
+		Contents: make([]*sls.LogContent, 0),
+	}
+	result = append(result, log)
+
 	for _, tmpLog := range data.Logs {
-		log := &sls.Log{
-			Time:     proto.Uint32(uint32(time.Now().Unix())),
-			Contents: make([]*sls.LogContent, 0),
-		}
-		result = append(result, log)
-
-		logs, _ := json.Marshal(tmpLog)
-		log.Contents = append(log.Contents, &sls.LogContent{
-			Key:   proto.String("__logs__"),
-			Value: proto.String(string(logs)),
-		})
-
-		if data.Tags != nil {
-			tags, _ := json.Marshal(data.Tags)
+		for k, v := range tmpLog {
 			log.Contents = append(log.Contents, &sls.LogContent{
-				Key:   proto.String("__tags__"),
-				Value: proto.String(string(tags)),
-			})
-		}
-
-		if data.Topic != "" {
-			client.SetTopic(data.Topic)
-			log.Contents = append(log.Contents, &sls.LogContent{
-				Key:   proto.String("__topic__"),
-				Value: proto.String(data.Topic),
-			})
-		}
-
-		if data.Source != "" {
-			client.SetSource(data.Source)
-			log.Contents = append(log.Contents, &sls.LogContent{
-				Key:   proto.String("__source__"),
-				Value: proto.String(data.Source),
+				Key:   proto.String(k),
+				Value: proto.String(v),
 			})
 		}
 	}
+
+	for k, v := range data.Tags {
+		log.Contents = append(log.Contents, &sls.LogContent{
+			Key:   proto.String(k),
+			Value: proto.String(v),
+		})
+	}
+
+	if data.Topic != "" {
+		client.SetTopic(data.Topic)
+		log.Contents = append(log.Contents, &sls.LogContent{
+			Key:   proto.String("__topic__"),
+			Value: proto.String(data.Topic),
+		})
+	}
+
+	if data.Source != "" {
+		client.SetSource(data.Source)
+		log.Contents = append(log.Contents, &sls.LogContent{
+			Key:   proto.String("__source__"),
+			Value: proto.String(data.Source),
+		})
+	}
+
 	return result
 }
